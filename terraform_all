@@ -1,0 +1,57 @@
+#!/bin/bash
+
+export AWS_REGION=us-east-1
+
+BLACKLISTED=( s3 dbpg iamg iamgm iamgp iamip iamp iampa iamr iamrp iamu iamup )
+
+ALL=( $( terraforming help | grep terraforming | grep -v help | awk '{print $2;}') )
+
+OPTS="--profile default"
+
+minus_set() {
+   local -n _array=$1
+   local -n _delete=$2
+   
+   for target in "${_delete[@]}"; do
+       for i in "${!_array[@]}"; do
+	   if [[ ${_array[i]} = $target ]]; then
+	       unset '_array[i]'
+	   fi
+       done
+   done
+
+}
+
+minus_set ALL BLACKLISTED
+
+#echo ${ALL[@]}
+
+cat >terraform.tfstate <<EOF
+{
+  "version": 1,
+  "serial": 1,
+  "modules": [
+    {
+      "path": [
+        "root"
+      ],
+      "outputs": {
+      },
+      "resources": {
+      }
+    }
+  ]
+}
+EOF
+
+cat >providers.tf <<EOF
+provider "aws" { region = "$AWS_REGION" }
+EOF
+
+for i in ${ALL[@]} ; do
+    terraforming $i $OPTS >$i.tf
+    terraforming $i $OPTS --tfstate  --merge=terraform.tfstate --overwrite
+done
+
+
+echo >&2 "WARNING: you may need to alter DB Parameter Groups' name attribute as it shouldn't contain a dot"
